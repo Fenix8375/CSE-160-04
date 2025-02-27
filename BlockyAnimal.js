@@ -5,8 +5,9 @@ var VSHADER_SOURCE = `
     attribute vec3 a_Normal;
     varying vec2 v_UV;
     varying vec3 v_Normal;
-    varying vec4 v_VertPos; // Declare v_VertPos as varying
+    varying vec4 v_VertPos;
     uniform mat4 u_ModelMatrix;
+    uniform mat4 u_NormalMatrix;
     uniform mat4 u_GlobalRotateMatrix;
     uniform mat4 u_ViewMatrix;
     uniform mat4 u_ProjectionMatrix;
@@ -14,7 +15,7 @@ var VSHADER_SOURCE = `
     void main() {
         gl_Position = u_ProjectionMatrix * u_ViewMatrix * u_GlobalRotateMatrix * u_ModelMatrix * a_Position;
         v_UV = a_UV;
-        v_Normal = a_Normal;
+        v_Normal = normalize(vec3(u_NormalMatrix * vec4(a_Normal, 1)));
         v_VertPos = u_ModelMatrix * a_Position; 
     }`;
 
@@ -24,8 +25,8 @@ var VSHADER_SOURCE = `
 var FSHADER_SOURCE = `
     precision mediump float;
     varying vec2 v_UV;
-    varying vec3 v_Normal; // Use the passed normal vector
-    varying vec4 v_VertPos; // Correctly receive the varying v_VertPos
+    varying vec3 v_Normal;
+    varying vec4 v_VertPos;
     uniform vec4 u_FragColor;
     uniform sampler2D u_Sampler0;
     uniform sampler2D u_Sampler1;
@@ -33,7 +34,8 @@ var FSHADER_SOURCE = `
     uniform int u_whichTexture;
     uniform vec3 u_lightPos;
     uniform vec3 u_cameraPos;
-    
+    uniform bool u_lightOn;
+
     void main() {
         vec4 baseColor;
         if (u_whichTexture == -3) {
@@ -51,28 +53,29 @@ var FSHADER_SOURCE = `
         } else {
             baseColor = vec4(0.6, 0.4, 0.2, 1.0);
         }
-    
-        // Light calculation
-        vec3 lightVector = normalize(u_lightPos - vec3(v_VertPos.xyz));
-        vec3 N = normalize(v_Normal);
-        float nDotL = max(dot(N, lightVector), 0.0);
-    
-        // Increase the diffuse component intensity
-        vec3 diffuse = vec3(baseColor) * nDotL * 1.0; // Increased intensity from 0.7 to 1.0
-    
-        // Increase the ambient component intensity
-        vec3 ambient = vec3(baseColor) * 0.5; // Increased ambient light contribution for more brightness
-    
-        vec3 R = reflect(-lightVector, N);
-        vec3 E = normalize(u_cameraPos - vec3(v_VertPos.xyz));
-        float specular = pow(max(dot(E, R), 0.0), 10.0);
-    
-        // Specular intensity increased
-        vec3 specularComponent = vec3(1.0) * specular * 1.5; // Increase the specular intensity
-    
-        gl_FragColor = vec4(diffuse + ambient + specularComponent, 1.0);
+
+        if (u_lightOn) {
+            vec3 lightVector = normalize(u_lightPos - vec3(v_VertPos.xyz));
+            vec3 N = normalize(v_Normal);
+            float nDotL = max(dot(N, lightVector), 0.0);
+            vec3 diffuse = vec3(baseColor) * nDotL;
+            vec3 ambient = vec3(baseColor) * 0.5;
+            vec3 R = reflect(-lightVector, N);
+            vec3 E = normalize(u_cameraPos - vec3(v_VertPos.xyz));
+            float specular = pow(max(dot(E, R), 0.0), 10.0);
+            vec3 specularComponent = vec3(1.0) * specular * 1.5;
+
+            if (u_whichTexture == 0) {
+                gl_FragColor = vec4(diffuse + ambient + specularComponent, 1.0);
+            } else {
+                gl_FragColor = vec4(diffuse + ambient, 1.0);
+            }
+        } else {
+            // When the light is off, just display the base color possibly with an ambient light factor
+            gl_FragColor = vec4(vec3(baseColor) * 0.5 + 0.5, 1.0); // Mix base color with a bit of light
+        }
     }`;
-    
+  
 
 // Global Variables for WebGL
 let canvas = 0;
@@ -89,6 +92,8 @@ let u_whichTexture = 0;
 let g_globalAngle = 0;
 let u_lightPos = 0;
 let u_cameraPos = 0;
+let u_lightOn = 0;
+let u_NormalMatrix = 0;
 
 
 
@@ -137,13 +142,15 @@ function connectVariablesToGLSL() {
     u_whichTexture = gl.getUniformLocation(gl.program, "u_whichTexture");
     u_lightPos = gl.getUniformLocation(gl.program, "u_lightPos");
     u_cameraPos = gl.getUniformLocation(gl.program, "u_cameraPos");
+    u_lightOn = gl.getUniformLocation(gl.program, "u_lightOn");
+    u_NormalMatrix = gl.getUniformLocation(gl.program, "u_NormalMatrix");
 
     if (
         a_Position < 0 || a_UV < 0 || !u_FragColor ||
         !u_ModelMatrix || !u_GlobalRotateMatrix ||
         !u_ProjectionMatrix || !u_ViewMatrix ||
         !u_Sampler0 || !u_whichTexture || !u_lightPos ||
-        !u_cameraPos
+        !u_cameraPos || !u_lightOn || !u_NormalMatrix
 
     ) {
         console.error("Error getting shader variable locations");
@@ -209,12 +216,17 @@ let g_normalOn = false;
 
 let g_lightPos = [0,1,-2];
 
+let g_lightOn = false;
+
 
 function addActionsForHtmlUI(){
 
     document.getElementById("angleSlide").addEventListener("mousemove", function() {g_globalAngle = this.value; renderScene(); });
     document.getElementById("normalOn").onclick = function() {g_normalOn = true;};
     document.getElementById("normalOff").onclick = function() {g_normalOn = false;};
+    document.getElementById("lightOn").onclick = function() {g_lightOn = true;};
+    document.getElementById("lightOff").onclick = function() {g_lightOn = false;};
+
 
 
     document.getElementById("lightX").addEventListener("mousemove", function(ev) {if(ev.buttons == 1) {g_lightPos[0] = this.value/100; renderScene(); }});
@@ -391,6 +403,7 @@ function renderScene() {
 
     gl.uniform3f(u_lightPos, g_lightPos[0], g_lightPos[1], g_lightPos[2]);
     gl.uniform3f(u_cameraPos, g_camera.eye.x, g_camera.eye.y, g_camera.eye.z);
+    gl.uniform1i(u_lightOn, g_lightOn);
 
     //Light
 
@@ -425,6 +438,7 @@ function renderScene() {
     sky.matrix.translate(0, -0.75, 0);
     sky.matrix.scale(-5, -5, -5);
     sky.matrix.translate(-0.5, -0.5, -0.5);
+    sky.normalMatrix.setInverseOf(sky.matrix).transpose();
     sky.render();
 
     //Cube
