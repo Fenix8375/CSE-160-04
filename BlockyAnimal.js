@@ -33,8 +33,10 @@ var FSHADER_SOURCE = `
     uniform sampler2D u_Sampler2;
     uniform int u_whichTexture;
     uniform vec3 u_lightPos;
+    uniform vec3 u_staticLightPos;
     uniform vec3 u_cameraPos;
     uniform bool u_lightOn;
+    uniform bool u_staticOn;
 
     void main() {
         vec4 baseColor;
@@ -54,26 +56,35 @@ var FSHADER_SOURCE = `
             baseColor = vec4(0.6, 0.4, 0.2, 1.0);
         }
 
+        vec3 N = normalize(v_Normal);
+        vec3 E = normalize(u_cameraPos - vec3(v_VertPos.xyz));
+        vec3 ambient = vec3(baseColor) * 0.5;
+        vec3 diffuse = vec3(0.0);
+        vec3 specularComponent = vec3(0.0);
+
         if (u_lightOn) {
             vec3 lightVector = normalize(u_lightPos - vec3(v_VertPos.xyz));
-            vec3 N = normalize(v_Normal);
             float nDotL = max(dot(N, lightVector), 0.0);
-            vec3 diffuse = vec3(baseColor) * nDotL;
-            vec3 ambient = vec3(baseColor) * 0.5;
+            diffuse += vec3(baseColor) * nDotL;
             vec3 R = reflect(-lightVector, N);
-            vec3 E = normalize(u_cameraPos - vec3(v_VertPos.xyz));
             float specular = pow(max(dot(E, R), 0.0), 10.0);
-            vec3 specularComponent = vec3(1.0) * specular * 1.5;
-
-            if (u_whichTexture == 0) {
-                gl_FragColor = vec4(diffuse + ambient + specularComponent, 1.0);
-            } else {
-                gl_FragColor = vec4(diffuse + ambient, 1.0);
-            }
-        } else {
-            gl_FragColor = vec4(vec3(baseColor) * 0.5 + 0.5, 1.0);
+            specularComponent += vec3(1.0) * specular * 1.5;
         }
+
+        if (u_staticOn) {
+            vec3 staticLightVector = normalize(u_staticLightPos - vec3(v_VertPos.xyz));
+            float nDotSL = max(dot(N, staticLightVector), 0.0);
+            diffuse += vec3(baseColor) * nDotSL;
+            vec3 staticR = reflect(-staticLightVector, N);
+            float staticSpecular = pow(max(dot(E, staticR), 0.0), 10.0);
+            specularComponent += vec3(1.0) * staticSpecular * 1.5;
+        }
+
+        vec4 finalColor = vec4(diffuse + ambient + specularComponent, 1.0);
+        gl_FragColor = finalColor;
     }`;
+
+
   
 
 // Global Variables for WebGL
@@ -93,6 +104,12 @@ let u_lightPos = 0;
 let u_cameraPos = 0;
 let u_lightOn = 0;
 let u_NormalMatrix = 0;
+let u_staticLightPos = 0;
+let u_staticOn = 0;
+
+
+
+
 let g_globalAngle2= 0;
 let g_left_front_leg = 0;
 
@@ -163,13 +180,16 @@ function connectVariablesToGLSL() {
     u_cameraPos = gl.getUniformLocation(gl.program, "u_cameraPos");
     u_lightOn = gl.getUniformLocation(gl.program, "u_lightOn");
     u_NormalMatrix = gl.getUniformLocation(gl.program, "u_NormalMatrix");
+    u_staticLightPos = gl.getUniformLocation(gl.program, "u_staticLightPos");
+    u_staticOn = gl.getUniformLocation(gl.program, "u_staticOn");
 
     if (
         a_Position < 0 || a_UV < 0 || !u_FragColor ||
         !u_ModelMatrix || !u_GlobalRotateMatrix ||
         !u_ProjectionMatrix || !u_ViewMatrix ||
         !u_Sampler0 || !u_whichTexture || !u_lightPos ||
-        !u_cameraPos || !u_lightOn || !u_NormalMatrix
+        !u_cameraPos || !u_lightOn || !u_NormalMatrix ||
+        !u_staticLightPos || !u_staticOn
 
     ) {
         console.error("Error getting shader variable locations");
@@ -235,7 +255,11 @@ let g_normalOn = false;
 
 let g_lightPos = [0,1,-2];
 
+let g_staticLightPos = [0,1,-2];
+
 let g_lightOn = false;
+
+let g_staticOn = false;
 
 
 function addActionsForHtmlUI(){
@@ -245,6 +269,8 @@ function addActionsForHtmlUI(){
     document.getElementById("normalOff").onclick = function() {g_normalOn = false;};
     document.getElementById("lightOn").onclick = function() {g_lightOn = true;};
     document.getElementById("lightOff").onclick = function() {g_lightOn = false;};
+    document.getElementById("spotOn").onclick = function() {g_staticOn = true;};
+    document.getElementById("spotOff").onclick = function() {g_staticOn = false;};
 
 
 
@@ -422,6 +448,9 @@ function renderScene() {
     gl.uniform3f(u_cameraPos, g_camera.eye.x, g_camera.eye.y, g_camera.eye.z);
     gl.uniform1i(u_lightOn, g_lightOn);
 
+    gl.uniform3f(u_staticLightPos, g_staticLightPos[0], g_staticLightPos[1], g_staticLightPos[2]);
+    gl.uniform1i(u_staticOn, g_staticOn);
+
     var globalRotMatX = new Matrix4().rotate(g_globalAngle2, 1, 0, 0);
 
     globalRotMat.multiply(globalRotMatX);
@@ -437,6 +466,7 @@ function renderScene() {
     // Dog's back body
     var back_body = new Cube();
     back_body.color = [0.8, 0.8, 0.8, 1];
+    back_body.textureNum = -2;
     back_body.matrix.set(globalDogMatrix); 
     back_body.matrix.translate(-0.4, -0.35, 0.0);
     back_body.matrix.scale(0.5, 0.4, 0.5);
@@ -445,16 +475,20 @@ function renderScene() {
     // Dog's front body
     var front_body = new Cube();
     front_body.color = [0.8, 0.8, 0.8, 1];
+    front_body.textureNum = -2;
     front_body.matrix.set(globalDogMatrix); 
-    front_body.matrix.translate(0.1, 0.1, 0); 
-    front_body.matrix.rotate(90, 1, 0, 0); 
-    front_body.matrix.scale(0.4, 0.6, 0.5); 
+    front_body.matrix.translate(0.1, -0.5, 0); 
+    front_body.matrix.rotate(0, 1, 0, 0); 
+    front_body.matrix.scale(0.4, 0.6, 0.6);
+    front_body.normalMatrix.setInverseOf(front_body.matrix).transpose();
+    
     // front_body.render();
 
     //Dog collar
 
     var collar = new Cube();
     collar.color = [1.0, 0.0, 0.0, 1.0];
+    collar.textureNum = -2;
     collar.matrix.set(globalDogMatrix); 
     collar.matrix.translate(0.51, 0.1, 0); 
     collar.matrix.rotate(90, 1, 0, 0); 
@@ -467,6 +501,7 @@ function renderScene() {
     // Dog's head
     var head = new Cube();
     head.color = [0.8, 0.8, 0.8, 1];
+    head.textureNum = -2;
     head.matrix.set(globalDogMatrix); 
     head.matrix.translate(0.4, -0.35, 0.1);
     head.matrix.rotate(g_head, 0, 0, 1);
@@ -475,6 +510,7 @@ function renderScene() {
     // Left eye
     var left_eye = new Cube();
     left_eye.color = [0, 0, 0, 1];
+    left_eye.textureNum = -2;
     left_eye.matrix.set(head.matrix); // Start with the head's matrix
     left_eye.matrix.translate(0.75, 0.6, 0.1); // Adjust positions relative to head
     left_eye.matrix.scale(0.3, 0.3, 0.3);
@@ -482,6 +518,7 @@ function renderScene() {
     // Right eye
     var right_eye = new Cube();
     right_eye.color = [0, 0, 0, 1];
+    right_eye.textureNum = -2;
     right_eye.matrix.set(head.matrix); // Start with the head's matrix
     right_eye.matrix.translate(0.75, 0.6, 0.6); // Adjust positions relative to head
     right_eye.matrix.scale(0.3, 0.3, 0.3);
@@ -489,6 +526,7 @@ function renderScene() {
     // Dog's left ear
     var left_ear = new Cube();
     left_ear.color = [0.8, 0.8, 0.8, 1];
+    left_ear.textureNum = -2;
     left_ear.matrix.set(head.matrix); // Start with the head's matrix
     left_ear.matrix.translate(0.35, 1, 0.1); // Adjust positions relative to head
     left_ear.matrix.scale(0.3,0.4,0.3);
@@ -496,6 +534,7 @@ function renderScene() {
     // Dog's right ear
     var right_ear = new Cube();
     right_ear.color = [0.8, 0.8, 0.8, 1];
+    right_ear.textureNum = -2;
     right_ear.matrix.set(head.matrix); // Start with the head's matrix
     right_ear.matrix.translate(0.35, 1, 0.6); // Adjust positions relative to head
     right_ear.matrix.scale(0.3, 0.4, 0.3);
@@ -503,6 +542,7 @@ function renderScene() {
     // Dog's nose
     var nose = new Cube();
     nose.color = [1.0, 0.8, 0.7, 1.0];
+    nose.textureNum = -2;
     nose.matrix.set(head.matrix); // Start with the head's matrix
     nose.matrix.translate(0.8, 0.1, 0.25); // Adjust positions relative to head
     nose.matrix.scale(0.6, 0.4, 0.5);
@@ -510,6 +550,7 @@ function renderScene() {
     // Nose color
     var nose_color = new Cube();
     nose_color.color = [0, 0, 0, 1];
+    nose_color.textureNum = -2;
     nose_color.matrix.set(nose.matrix);
     nose_color.matrix.translate(0.55, 0.5,0.3);
     nose_color.matrix.scale(0.5, 0.4, 0.5);
@@ -522,6 +563,7 @@ function renderScene() {
     var left_front_leg = new Cube();
 
     left_front_leg.color = [0.8, 0.8, 0.8, 1];
+    left_front_leg.textureNum = -2;
     left_front_leg.matrix.set(globalDogMatrix);
     left_front_leg.matrix.translate(.4, -.3, 0.1);
     left_front_leg.matrix.rotate(180,0,0,1);
@@ -535,19 +577,19 @@ function renderScene() {
     var right_front_leg = new Cube();
 
     right_front_leg.color = [0.8, 0.8, 0.8, 1];
+    right_front_leg.textureNum = -2;
     right_front_leg.matrix.set(globalDogMatrix);
     right_front_leg.matrix.translate(.4, -.3, 0.4);
     right_front_leg.matrix.rotate(180,0,0,1);
     right_front_leg.matrix.rotate(g_right_front_leg, 0,0,1);
-
     right_front_leg.matrix.scale(0.1, 0.4, 0.1);
-    // right_front_leg.render();
 
     //Right back leg
 
     var right_back_leg = new Cube();
 
     right_back_leg.color = [0.8, 0.8, 0.8, 1];
+    right_back_leg.textureNum = -2;
     right_back_leg.matrix.set(globalDogMatrix);
     right_back_leg.matrix.translate(-.2, -.2, 0.4);
     right_back_leg.matrix.rotate(180,0,0,1);
@@ -562,6 +604,7 @@ function renderScene() {
     var left_back_leg = new Cube();
 
     left_back_leg.color = [0.8, 0.8, 0.8, 1];
+    left_back_leg.textureNum = -2;
     left_back_leg.matrix.set(globalDogMatrix);
     left_back_leg.matrix.translate(-.2, -.2, 0.1);
     left_back_leg.matrix.rotate(180,0,0,1);
@@ -575,6 +618,7 @@ function renderScene() {
     var tail = new Cube();
 
     tail.color = [0.8, 0.8, 0.8, 1];
+    tail.textureNum = -2;
     tail.matrix.set(globalDogMatrix);
     tail.matrix.translate(-.3, -.2, 0.2);
     tail.matrix.rotate(80,0,0,1);
@@ -642,8 +686,17 @@ function renderScene() {
     light.matrix.translate(g_lightPos[0],g_lightPos[1],g_lightPos[2]);
     light.matrix.scale(-.1,-.1,-.1);
     light.matrix.translate(-.5,-.5,-.5);
-    light.render();
+    // light.render();
 
+    
+    var light2 = new Cube();
+    light2.color = [0.5, 0.4, 1, 1];
+    light2.textureNum = -2;
+    light2.matrix.translate(g_staticLightPos[0], g_staticLightPos[1] - 1.5, g_staticLightPos[2] + 3.5); 
+    light2.matrix.scale(-0.1, -0.1, -0.1);
+    light2.matrix.translate(-2, -2, -6);
+    // light2.render();
+    
 
 
     //Floor
