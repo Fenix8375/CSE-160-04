@@ -93,6 +93,26 @@ let u_lightPos = 0;
 let u_cameraPos = 0;
 let u_lightOn = 0;
 let u_NormalMatrix = 0;
+let g_globalAngle2= 0;
+let g_left_front_leg = 0;
+
+let g_right_front_leg = 0;
+
+let g_left_back_leg = 0;
+
+let g_right_back_leg = 0;
+
+let g_head = 0;
+
+let g_tail = 0;
+
+let g_back_body = 0;
+
+let g_front_body = 0;
+
+let g_On = false;
+
+var g_ShiftPressed = false;
 
 
 
@@ -396,14 +416,224 @@ function renderScene() {
 
     gl.uniformMatrix4fv(u_ViewMatrix, false, g_camera.viewMatrix.elements);
 
-
-    var globalRotMat = new Matrix4().rotate(g_globalAngle, 0, 1, 0);
     gl.uniformMatrix4fv(u_GlobalRotateMatrix, false, globalRotMat.elements);
 
     gl.uniform3f(u_lightPos, g_lightPos[0], g_lightPos[1], g_lightPos[2]);
     gl.uniform3f(u_cameraPos, g_camera.eye.x, g_camera.eye.y, g_camera.eye.z);
     gl.uniform1i(u_lightOn, g_lightOn);
 
+    var globalRotMatX = new Matrix4().rotate(g_globalAngle2, 1, 0, 0);
+
+    globalRotMat.multiply(globalRotMatX);
+
+    gl.uniformMatrix4fv(u_GlobalRotateMatrix, false, globalRotMat.elements);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+
+    var globalDogMatrix = new Matrix4();
+    globalDogMatrix.translate(0.0, 0.0, 0.0);
+    globalDogMatrix.rotate(g_globalAngle, 0, 1, 0);
+
+    // Dog's back body
+    var back_body = new Cube();
+    back_body.color = [0.8, 0.8, 0.8, 1];
+    back_body.matrix.set(globalDogMatrix); 
+    back_body.matrix.translate(-0.4, -0.35, 0.0);
+    back_body.matrix.scale(0.5, 0.4, 0.5);
+    back_body.matrix.rotate(g_back_body, 0,0,1);
+    
+    // Dog's front body
+    var front_body = new Cube();
+    front_body.color = [0.8, 0.8, 0.8, 1];
+    front_body.matrix.set(globalDogMatrix); 
+    front_body.matrix.translate(0.1, 0.1, 0); 
+    front_body.matrix.rotate(90, 1, 0, 0); 
+    front_body.matrix.scale(0.4, 0.6, 0.5); 
+    // front_body.render();
+
+    //Dog collar
+
+    var collar = new Cube();
+    collar.color = [1.0, 0.0, 0.0, 1.0];
+    collar.matrix.set(globalDogMatrix); 
+    collar.matrix.translate(0.51, 0.1, 0); 
+    collar.matrix.rotate(90, 1, 0, 0); 
+    collar.matrix.scale(0., 0.6, 0.5); 
+    // collar.render();
+
+
+    
+
+    // Dog's head
+    var head = new Cube();
+    head.color = [0.8, 0.8, 0.8, 1];
+    head.matrix.set(globalDogMatrix); 
+    head.matrix.translate(0.4, -0.35, 0.1);
+    head.matrix.rotate(g_head, 0, 0, 1);
+    head.matrix.scale(0.3, 0.4, 0.4);
+
+    // Left eye
+    var left_eye = new Cube();
+    left_eye.color = [0, 0, 0, 1];
+    left_eye.matrix.set(head.matrix); // Start with the head's matrix
+    left_eye.matrix.translate(0.75, 0.6, 0.1); // Adjust positions relative to head
+    left_eye.matrix.scale(0.3, 0.3, 0.3);
+
+    // Right eye
+    var right_eye = new Cube();
+    right_eye.color = [0, 0, 0, 1];
+    right_eye.matrix.set(head.matrix); // Start with the head's matrix
+    right_eye.matrix.translate(0.75, 0.6, 0.6); // Adjust positions relative to head
+    right_eye.matrix.scale(0.3, 0.3, 0.3);
+
+    // Dog's left ear
+    var left_ear = new Cube();
+    left_ear.color = [0.8, 0.8, 0.8, 1];
+    left_ear.matrix.set(head.matrix); // Start with the head's matrix
+    left_ear.matrix.translate(0.35, 1, 0.1); // Adjust positions relative to head
+    left_ear.matrix.scale(0.3,0.4,0.3);
+
+    // Dog's right ear
+    var right_ear = new Cube();
+    right_ear.color = [0.8, 0.8, 0.8, 1];
+    right_ear.matrix.set(head.matrix); // Start with the head's matrix
+    right_ear.matrix.translate(0.35, 1, 0.6); // Adjust positions relative to head
+    right_ear.matrix.scale(0.3, 0.4, 0.3);
+
+    // Dog's nose
+    var nose = new Cube();
+    nose.color = [1.0, 0.8, 0.7, 1.0];
+    nose.matrix.set(head.matrix); // Start with the head's matrix
+    nose.matrix.translate(0.8, 0.1, 0.25); // Adjust positions relative to head
+    nose.matrix.scale(0.6, 0.4, 0.5);
+
+    // Nose color
+    var nose_color = new Cube();
+    nose_color.color = [0, 0, 0, 1];
+    nose_color.matrix.set(nose.matrix);
+    nose_color.matrix.translate(0.55, 0.5,0.3);
+    nose_color.matrix.scale(0.5, 0.4, 0.5);
+
+    // nose_color.render();
+
+
+    //Left Front leg
+
+    var left_front_leg = new Cube();
+
+    left_front_leg.color = [0.8, 0.8, 0.8, 1];
+    left_front_leg.matrix.set(globalDogMatrix);
+    left_front_leg.matrix.translate(.4, -.3, 0.1);
+    left_front_leg.matrix.rotate(180,0,0,1);
+    left_front_leg.matrix.rotate(g_left_front_leg, 0,0,1);
+    left_front_leg.matrix.scale(0.1, 0.4, 0.1);
+    // left_front_leg.render();
+
+
+    //Right front leg
+
+    var right_front_leg = new Cube();
+
+    right_front_leg.color = [0.8, 0.8, 0.8, 1];
+    right_front_leg.matrix.set(globalDogMatrix);
+    right_front_leg.matrix.translate(.4, -.3, 0.4);
+    right_front_leg.matrix.rotate(180,0,0,1);
+    right_front_leg.matrix.rotate(g_right_front_leg, 0,0,1);
+
+    right_front_leg.matrix.scale(0.1, 0.4, 0.1);
+    // right_front_leg.render();
+
+    //Right back leg
+
+    var right_back_leg = new Cube();
+
+    right_back_leg.color = [0.8, 0.8, 0.8, 1];
+    right_back_leg.matrix.set(globalDogMatrix);
+    right_back_leg.matrix.translate(-.2, -.2, 0.4);
+    right_back_leg.matrix.rotate(180,0,0,1);
+    right_back_leg.matrix.rotate(g_right_back_leg, 0, 0, 1);
+
+    right_back_leg.matrix.scale(0.1, 0.5, 0.1);
+    // right_back_leg.render();
+
+    //Left back leg
+
+
+    var left_back_leg = new Cube();
+
+    left_back_leg.color = [0.8, 0.8, 0.8, 1];
+    left_back_leg.matrix.set(globalDogMatrix);
+    left_back_leg.matrix.translate(-.2, -.2, 0.1);
+    left_back_leg.matrix.rotate(180,0,0,1);
+    left_back_leg.matrix.rotate(g_left_back_leg,0,0,1);
+
+    left_back_leg.matrix.scale(0.1, 0.5, 0.1);
+    // left_back_leg.render();
+
+    //Tail
+
+    var tail = new Cube();
+
+    tail.color = [0.8, 0.8, 0.8, 1];
+    tail.matrix.set(globalDogMatrix);
+    tail.matrix.translate(-.3, -.2, 0.2);
+    tail.matrix.rotate(80,0,0,1);
+    tail.matrix.rotate(g_tail, 0,0,1);
+
+    tail.matrix.scale(0.1, 0.4, 0.1);
+
+    // tail.render();
+
+    //Spikes
+
+    var cone = new Cone(0.2, 0.1, 6); // Height, radius, and number of segments
+
+    cone.matrix.set(globalDogMatrix);
+    cone.matrix.translate(0.35, 0.05, 0.3);
+    
+    // cone.render();
+    
+    var cone2 = new Cone(0.2, 0.1, 6); // Height, radius, and number of segments
+    
+    cone2.matrix.set(globalDogMatrix);
+    cone2.matrix.translate(0.2, 0.05, 0.3);
+        
+        
+    // cone2.render();
+    
+    var cone3 = new Cone(0.2, 0.1, 6); // Height, radius, and number of segments
+
+    cone3.matrix.set(globalDogMatrix);
+    cone3.matrix.translate(0, 0.05, 0.3);
+        
+        
+
+    
+    var cone4 = new Cone(0.2, 0.1, 6); // Height, radius, and number of segments
+    
+    cone4.matrix.set(globalDogMatrix);
+    cone4.matrix.translate(-0.2, 0.05, 0.3);
+
+    nose.render();
+    head.render();
+    front_body.render();
+    back_body.render();
+    left_back_leg.render();
+    right_back_leg.render();
+    left_front_leg.render();
+    right_front_leg.render();
+    tail.render();
+    cone.render();
+    cone2.render();
+    cone3.render();
+    cone4.render();
+    collar.render();
+    right_eye.render();
+    right_ear.render();
+    left_ear.render();
+    left_eye.render();
+    nose_color.render();
+    
     //Light
 
     var light = new Cube();
@@ -462,6 +692,7 @@ function renderScene() {
     sphere.matrix.translate(2, 0, 2);
     sphere.normalMatrix.setInverseOf(sphere.matrix).transpose();
     sphere.render();
+
     
 
 }
