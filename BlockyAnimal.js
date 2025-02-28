@@ -255,7 +255,7 @@ let g_normalOn = false;
 
 let g_lightPos = [0,1,-2];
 
-let g_staticLightPos = [0,1,-2];
+let g_staticLightPos = [0, -2, -4];
 
 let g_lightOn = false;
 
@@ -692,10 +692,12 @@ function renderScene() {
     var light2 = new Cube();
     light2.color = [0.5, 0.4, 1, 1];
     light2.textureNum = -2;
-    light2.matrix.translate(g_staticLightPos[0], g_staticLightPos[1] - 1.5, g_staticLightPos[2] + 3.5); 
+    light2.matrix.rotate(90, 1, 0, 0);
+    light2.matrix.translate(g_staticLightPos[0], g_staticLightPos[1], g_staticLightPos[2]);
     light2.matrix.scale(-0.1, -0.1, -0.1);
     light2.matrix.translate(-2, -2, -6);
     // light2.render();
+    
     
 
 
