@@ -71,8 +71,7 @@ var FSHADER_SOURCE = `
                 gl_FragColor = vec4(diffuse + ambient, 1.0);
             }
         } else {
-            // When the light is off, just display the base color possibly with an ambient light factor
-            gl_FragColor = vec4(vec3(baseColor) * 0.5 + 0.5, 1.0); // Mix base color with a bit of light
+            gl_FragColor = vec4(vec3(baseColor) * 0.5 + 0.5, 1.0);
         }
     }`;
   
@@ -447,8 +446,9 @@ function renderScene() {
     block.color = [1.0, 0.0, 0.0, 1.0];
     block.textureNum = 0;
     block.matrix.translate(0, -.75, 0.0);
-    block.matrix.scale(-1, -1 ,-1);
-    block.matrix.translate(-0.5, 0, -0.5);
+    block.matrix.scale(1, 1 ,1);
+    block.matrix.translate(-2, 0, -2);
+    block.normalMatrix.setInverseOf(block.matrix).transpose();
     block.render();
 
 
@@ -458,8 +458,9 @@ function renderScene() {
     sphere.color = [1.0, 0.0, 0.0, 1.0];
     sphere.textureNum = -3;
     sphere.matrix.translate(0, -.75, 0.0);
-    sphere.matrix.scale(-0.5, -0.5 ,-0.5);
-    sphere.matrix.translate(1, 0, -3);
+    sphere.matrix.scale(0.5, 0.5 ,0.5);
+    sphere.matrix.translate(2, 0, 2);
+    sphere.normalMatrix.setInverseOf(sphere.matrix).transpose();
     sphere.render();
     
 
